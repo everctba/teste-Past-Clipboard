@@ -1,11 +1,276 @@
-<meta charset="utf-8">
+<!DOCTYPE html>
+<html lang="pt-BR">
 
-<pre id="result"></pre>
-<script>// Só consegue texto simples
-   document.addEventListener('paste', (e) => {
-      const text = e.clipboardData.getData('text/html');
-      // Perde toda formatação
-      document.write(text);
-   });
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Inspector de Clipboard</title>
+   <style>
+      :root {
+         --bg-color: #0f172a;
+         --card-bg: #1e293b;
+         --text-primary: #f8fafc;
+         --text-secondary: #94a3b8;
+         --border-color: #334155;
+         --accent-color: #3b82f6;
+         --code-font: 'Consolas', 'Monaco', 'Courier New', monospace;
+      }
 
-</script>
+      body {
+         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+         background-color: var(--bg-color);
+         color: var(--text-primary);
+         margin: 0;
+         padding: 2rem;
+         min-height: 100vh;
+         display: flex;
+         flex-direction: column;
+         gap: 2rem;
+      }
+
+      h1 {
+         text-align: center;
+         font-weight: 300;
+         letter-spacing: -0.05em;
+         margin: 0;
+         color: var(--text-secondary);
+      }
+
+      h1 span {
+         color: var(--text-primary);
+         font-weight: 700;
+      }
+
+      .instructions {
+         text-align: center;
+         color: var(--text-secondary);
+         font-size: 0.9rem;
+         margin-top: -1rem;
+         padding: 1rem;
+         border: 1px dashed var(--border-color);
+         border-radius: 8px;
+         background: rgba(30, 41, 59, 0.5);
+      }
+
+      .grid-container {
+         display: grid;
+         grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+         gap: 2rem;
+         flex: 1;
+      }
+
+      .card {
+         background: var(--card-bg);
+         border-radius: 12px;
+         border: 1px solid var(--border-color);
+         display: flex;
+         flex-direction: column;
+         overflow: hidden;
+         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+         transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .card:hover {
+         border-color: var(--accent-color);
+         transform: translateY(-2px);
+         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      }
+
+      .card-header {
+         padding: 1rem;
+         border-bottom: 1px solid var(--border-color);
+         font-weight: 600;
+         font-size: 0.9rem;
+         text-transform: uppercase;
+         letter-spacing: 0.05em;
+         color: var(--accent-color);
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+      }
+
+      .badge {
+         font-size: 0.7rem;
+         background: rgba(59, 130, 246, 0.1);
+         color: var(--accent-color);
+         padding: 0.2rem 0.6rem;
+         border-radius: 9999px;
+         font-weight: 700;
+      }
+
+      .card-content {
+         padding: 1.5rem;
+         overflow: auto;
+         flex: 1;
+         font-size: 0.95rem;
+         line-height: 1.6;
+         min-height: 300px;
+         max-height: 600px;
+      }
+
+      /* Specific styles for different content types */
+      pre {
+         margin: 0;
+         white-space: pre-wrap;
+         word-break: break-all;
+         font-family: var(--code-font);
+         color: #e2e8f0;
+      }
+
+      /* JSON Syntax Highlighting approx */
+      .json-key {
+         color: #9cdcfe;
+      }
+
+      .json-string {
+         color: #ce9178;
+      }
+
+      .json-number {
+         color: #b5cea8;
+      }
+
+      .json-boolean {
+         color: #569cd6;
+      }
+
+      .json-null {
+         color: #569cd6;
+      }
+
+      .empty-state {
+         color: var(--text-secondary);
+         font-style: italic;
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         height: 100%;
+         opacity: 0.5;
+      }
+
+      /* HTML Preview Isolation */
+      .html-preview-wrapper {
+         all: initial;
+         /* Reset styles so internal content doesn't inherit app styles easily */
+         display: block;
+         background: #fff;
+         /* Most HTML pastes expect white bg */
+         color: #000;
+         padding: 1rem;
+         border-radius: 4px;
+         height: 100%;
+         overflow: auto;
+         font-family: sans-serif;
+      }
+   </style>
+</head>
+
+<body>
+
+   <header>
+      <h1>Clipboard <span>Inspector</span></h1>
+   </header>
+
+   <div class="instructions">
+      Pressione <strong>CTRL+V</strong> em qualquer lugar desta página para inspecionar o conteúdo.
+   </div>
+
+   <div class="grid-container">
+
+      <!-- HTML Visual -->
+      <article class="card">
+         <header class="card-header">
+            HTML Renderizado
+            <span class="badge">Visual</span>
+         </header>
+         <div class="card-content" id="html-visual">
+            <div class="empty-state">Aguardando colagem...</div>
+         </div>
+      </article>
+
+      <!-- Plain Text -->
+      <article class="card">
+         <header class="card-header">
+            Texto Simples
+            <span class="badge">text/plain</span>
+         </header>
+         <div class="card-content">
+            <pre id="text-plain"><div class="empty-state">Aguardando colagem...</div></pre>
+         </div>
+      </article>
+
+      <!-- JSON/Raw -->
+      <article class="card">
+         <header class="card-header">
+            JSON Detalhado
+            <span class="badge">application/json</span>
+         </header>
+         <div class="card-content">
+            <pre id="json-result"><div class="empty-state">Aguardando colagem...</div></pre>
+         </div>
+      </article>
+
+   </div>
+
+   <script>
+      document.addEventListener('paste', (e) => {
+         e.preventDefault();
+
+         const htmlContent = e.clipboardData.getData('text/html');
+         const plainContent = e.clipboardData.getData('text/plain');
+
+         // 1. Update Plain Text
+         const textContainer = document.getElementById('text-plain');
+         textContainer.textContent = plainContent || '(Vazio)';
+
+         // 2. Update HTML Visual
+         const htmlContainer = document.getElementById('html-visual');
+         if (htmlContent) {
+            // Wrapper to help isolate styles slightly and provide white bg
+            htmlContainer.innerHTML = `<div class="html-preview-wrapper">${htmlContent}</div>`;
+         } else {
+            htmlContainer.innerHTML = `<div class="empty-state">Nenhum conteúdo HTML encontrado.</div>`;
+         }
+
+         // 3. Try Parse JSON or show Raw Info
+         const jsonContainer = document.getElementById('json-result');
+
+         try {
+            // Try parsing the plain text as JSON
+            const jsonObject = JSON.parse(plainContent);
+            // If success, pretty print
+            jsonContainer.innerHTML = syntaxHighlight(jsonObject);
+         } catch (err) {
+            // Not JSON, show generic clipboard info or failure message
+            jsonContainer.textContent = "Conteúdo não é um JSON válido.\n\n" +
+               "Tamanho: " + plainContent.length + " caracteres.\n" +
+               "Tipos detectados: " + e.clipboardData.types.join(", ");
+         }
+      });
+
+      // Simple JSON Syntax Highlighter
+      function syntaxHighlight(json) {
+         if (typeof json != 'string') {
+            json = JSON.stringify(json, undefined, 2);
+         }
+         json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+         return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+            let cls = 'json-number';
+            if (/^"/.test(match)) {
+               if (/:$/.test(match)) {
+                  cls = 'json-key';
+               } else {
+                  cls = 'json-string';
+               }
+            } else if (/true|false/.test(match)) {
+               cls = 'json-boolean';
+            } else if (/null/.test(match)) {
+               cls = 'json-null';
+            }
+            return '<span class="' + cls + '">' + match + '</span>';
+         });
+      }
+   </script>
+</body>
+
+</html>
