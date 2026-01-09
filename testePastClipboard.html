@@ -1,0 +1,11 @@
+<meta charset="utf-8">
+
+<pre id="result"></pre>
+<script>// Só consegue texto simples
+   document.addEventListener('paste', (e) => {
+      const text = e.clipboardData.getData('text/html');
+      // Perde toda formatação
+      document.write(text);
+   });
+
+</script>
