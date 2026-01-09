@@ -13,6 +13,7 @@
          --text-secondary: #94a3b8;
          --border-color: #334155;
          --accent-color: #3b82f6;
+         --success-color: #22c55e;
          --code-font: 'Consolas', 'Monaco', 'Courier New', monospace;
       }
 
@@ -50,12 +51,34 @@
          border: 1px dashed var(--border-color);
          border-radius: 8px;
          background: rgba(30, 41, 59, 0.5);
+         display: flex;
+         flex-direction: column;
+         align-items: center;
+         gap: 1rem;
+      }
+
+      .btn-async {
+         background-color: var(--accent-color);
+         color: white;
+         border: none;
+         padding: 0.6rem 1.2rem;
+         border-radius: 6px;
+         font-weight: 600;
+         cursor: pointer;
+         transition: background 0.2s;
+         display: inline-flex;
+         align-items: center;
+         gap: 0.5rem;
+      }
+
+      .btn-async:hover {
+         background-color: #2563eb;
       }
 
       .grid-container {
          display: grid;
-         grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-         gap: 2rem;
+         grid-template-columns: repeat(auto-fit, minmax(446px, 1fr));
+         gap: 1rem;
          flex: 1;
       }
 
@@ -96,6 +119,11 @@
          padding: 0.2rem 0.6rem;
          border-radius: 9999px;
          font-weight: 700;
+      }
+
+      .badge-mime {
+         color: var(--success-color);
+         background: rgba(34, 197, 94, 0.1);
       }
 
       .card-content {
@@ -162,17 +190,55 @@
          overflow: auto;
          font-family: sans-serif;
       }
+
+      /* Image Preview */
+      .blob-preview {
+         max-width: 100%;
+         height: auto;
+         border-radius: 4px;
+         border: 1px solid var(--border-color);
+         display: block;
+      }
+
+      .mime-list {
+         list-style: none;
+         padding: 0;
+         margin: 0 0 1rem 0;
+      }
+
+      .mime-list li {
+         font-size: 0.8rem;
+         color: var(--text-secondary);
+         margin-bottom: 0.25rem;
+      }
+
+      .mime-list code {
+         color: var(--accent-color);
+         background: rgba(59, 130, 246, 0.1);
+         padding: 2px 4px;
+         border-radius: 4px;
+         font-family: var(--code-font);
+      }
    </style>
 </head>
 
 <body>
 
    <header>
-      <h1>Clipboard <span>Inspector</span></h1>
+      <h1>MIME type Clipboard <span>Inspector</span></h1>
    </header>
 
    <div class="instructions">
-      Pressione <strong>CTRL+V</strong> em qualquer lugar desta página para inspecionar o conteúdo.
+      <div>
+         Pressione <strong>CTRL+V</strong> para colagem simples OU use o botão abaixo para leitura completa (Async API).
+      </div>
+      <button id="btn-read" class="btn-async">
+         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path
+               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+         </svg>
+         Ler Clipboard (Async / Imagens)
+      </button>
    </div>
 
    <div class="grid-container">
@@ -210,15 +276,98 @@
          </div>
       </article>
 
+      <!-- Blobs / Images / Async Info -->
+      <article class="card" style="grid-column: 1 / -1;">
+         <header class="card-header">
+            Mídia / MIME Info
+            <span class="badge badge-mime">Async / Blobs</span>
+         </header>
+         <div class="card-content" id="blob-result">
+            <div class="empty-state">Use o botão "Ler Clipboard" para ver imagens e metadados.</div>
+         </div>
+      </article>
+
    </div>
 
    <script>
+      // Sync Paste Listener (CTRL+V)
       document.addEventListener('paste', (e) => {
          e.preventDefault();
 
          const htmlContent = e.clipboardData.getData('text/html');
          const plainContent = e.clipboardData.getData('text/plain');
 
+         updateTextViews(plainContent, htmlContent);
+      });
+
+      // Async Clipboard API Listener (Button)
+      document.getElementById('btn-read').addEventListener('click', async () => {
+         const blobContainer = document.getElementById('blob-result');
+         blobContainer.innerHTML = '<div class="empty-state">Lendo clipboard...</div>';
+
+         try {
+            // Must be triggered by user interaction
+            const clipboardItems = await navigator.clipboard.read();
+
+            // Clear previous blob content
+            blobContainer.innerHTML = '';
+
+            let hasImage = false;
+            let plainText = '';
+            let htmlText = '';
+
+            for (const item of clipboardItems) {
+               const mimeList = document.createElement('ul');
+               mimeList.className = 'mime-list';
+               mimeList.innerHTML = `<li><strong>Tipos disponíveis neste item:</strong></li>`;
+
+               for (const type of item.types) {
+                  mimeList.innerHTML += `<li><code>${type}</code></li>`;
+
+                  const blob = await item.getType(type);
+
+                  // Image Handler
+                  if (type.startsWith('image/')) {
+                     hasImage = true;
+                     const imgUrl = URL.createObjectURL(blob);
+                     const img = document.createElement('img');
+                     img.src = imgUrl;
+                     img.className = 'blob-preview';
+                     img.style.marginBottom = '1rem';
+                     blobContainer.appendChild(img);
+
+                     // Cleanup URL later
+                     img.onload = () => URL.revokeObjectURL(imgUrl);
+                  }
+
+                  // Text/HTML Handler logic for Async read
+                  // Browsers return text as Blobs too
+                  if (type === 'text/plain') {
+                     plainText = await blob.text();
+                  }
+                  if (type === 'text/html') {
+                     htmlText = await blob.text();
+                  }
+               }
+               blobContainer.appendChild(mimeList);
+            }
+
+            if (!clipboardItems.length) {
+               blobContainer.innerHTML = '<div class="empty-state">Clipboard vazio.</div>';
+            }
+
+            // If Async API retrieved text, update the text views too
+            if (plainText || htmlText) {
+               updateTextViews(plainText, htmlText);
+            }
+
+         } catch (err) {
+            console.error(err);
+            blobContainer.innerHTML = `<div style="color:red">Erro ao ler clipboard: ${err.message}<br><small>Verifique se permitiu o acesso ou se o contexto é seguro (HTTPS/localhost).</small></div>`;
+         }
+      });
+
+      function updateTextViews(plainContent, htmlContent) {
          // 1. Update Plain Text
          const textContainer = document.getElementById('text-plain');
          textContainer.textContent = plainContent || '(Vazio)';
@@ -226,7 +375,6 @@
          // 2. Update HTML Visual
          const htmlContainer = document.getElementById('html-visual');
          if (htmlContent) {
-            // Wrapper to help isolate styles slightly and provide white bg
             htmlContainer.innerHTML = `<div class="html-preview-wrapper">${htmlContent}</div>`;
          } else {
             htmlContainer.innerHTML = `<div class="empty-state">Nenhum conteúdo HTML encontrado.</div>`;
@@ -236,17 +384,13 @@
          const jsonContainer = document.getElementById('json-result');
 
          try {
-            // Try parsing the plain text as JSON
             const jsonObject = JSON.parse(plainContent);
-            // If success, pretty print
             jsonContainer.innerHTML = syntaxHighlight(jsonObject);
          } catch (err) {
-            // Not JSON, show generic clipboard info or failure message
             jsonContainer.textContent = "Conteúdo não é um JSON válido.\n\n" +
-               "Tamanho: " + plainContent.length + " caracteres.\n" +
-               "Tipos detectados: " + e.clipboardData.types.join(", ");
+               "Tamanho: " + (plainContent ? plainContent.length : 0) + " caracteres.";
          }
-      });
+      }
 
       // Simple JSON Syntax Highlighter
       function syntaxHighlight(json) {
